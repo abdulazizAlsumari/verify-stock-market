@@ -210,6 +210,8 @@ canvas{display:block;width:100%;height:260px}
           <select id="oType">
             <option value="limit">أمر محدد (Limit)</option>
             <option value="market">أمر بسعر السوق (Market)</option>
+            <option value="ioc">تنفيذ فوري وإلغاء الباقي (IOC)</option>
+            <option value="fok">تنفيذ كامل أو إلغاء (FOK)</option>
           </select>
           <label>السعر</label><input id="oPx" type="number" step="0.01">
           <label>الكمية</label><input id="oQty" type="number" step="1" value="100">
@@ -268,6 +270,7 @@ var CONFIG = {
   tapeMax: 40,              // أقصى عدد صفقات في السجل
   newsMax: 30,              // أقصى عدد أخبار
   tickMs: 100,              // كل كم ميلي ثانية حقيقية تتقدم المحاكاة خطوة
+  auctionRandomMax: 1,      // أقصى فترة عشوائية (بالدقائق) تُنهي المزاد مبكراً
   // جلسات اليوم: الدقيقة من منتصف الليل -> نوع الجلسة
   sessions: [
     { from: 9 * 60 + 30, to: 10 * 60,      key: "openAuction",  label: "مزاد الافتتاح",        cls: "auc" },
@@ -280,19 +283,19 @@ var CONFIG = {
 
 /* ==========================================================================
    2) SYMBOLS — الشركات الوهمية
-   كل شركة: الرمز، الاسم، القطاع، سعر البداية، عدد الأسهم، تقلب يومي تقريبي
+   كل شركة: الرمز، الاسم، القطاع، سعر البداية، عدد الأسهم، تقلب يومي تقريبي، ff = نسبة الأسهم الحرة
    ========================================================================== */
 var SYMBOLS = [
-  { code: "1111", name: "بنك الواحة",            sector: "البنوك",            px: 85.70,  shares: 1200000000, vol: 0.011 },
-  { code: "2222", name: "سابكو للبتروكيماويات",  sector: "المواد الأساسية",   px: 82.45,  shares: 3000000000, vol: 0.016 },
-  { code: "3333", name: "إسمنت نجد",             sector: "المواد الأساسية",   px: 48.16,  shares: 165000000,  vol: 0.013 },
-  { code: "4444", name: "أسواق الركن",           sector: "تجزئة الأغذية",     px: 19.10,  shares: 450000000,  vol: 0.015 },
-  { code: "5555", name: "اتصالات المها",         sector: "الاتصالات",         px: 51.35,  shares: 2000000000, vol: 0.010 },
-  { code: "6666", name: "كهرباء الشرق",          sector: "المرافق العامة",    px: 24.75,  shares: 4166000000, vol: 0.009 },
-  { code: "7777", name: "تقنية سدرة",            sector: "تقنية المعلومات",   px: 133.20, shares: 120000000,  vol: 0.026 },
-  { code: "8888", name: "تأمين الأمان",          sector: "التأمين",           px: 12.64,  shares: 100000000,  vol: 0.022 },
-  { code: "9999", name: "لوجستيات الدرب",        sector: "النقل",             px: 66.95,  shares: 80000000,   vol: 0.018 },
-  { code: "2121", name: "أغذية الوادي",          sector: "إنتاج الأغذية",     px: 30.38,  shares: 220000000,  vol: 0.014 }
+  { code: "1111", name: "بنك الواحة",            sector: "البنوك",            px: 85.70,  shares: 1200000000, vol: 0.011, ff: 0.30 },
+  { code: "2222", name: "سابكو للبتروكيماويات",  sector: "المواد الأساسية",   px: 82.45,  shares: 3000000000, vol: 0.016, ff: 0.40 },
+  { code: "3333", name: "إسمنت نجد",             sector: "المواد الأساسية",   px: 48.16,  shares: 165000000,  vol: 0.013, ff: 0.65 },
+  { code: "4444", name: "أسواق الركن",           sector: "تجزئة الأغذية",     px: 19.10,  shares: 450000000,  vol: 0.015, ff: 0.55 },
+  { code: "5555", name: "اتصالات المها",         sector: "الاتصالات",         px: 51.35,  shares: 2000000000, vol: 0.010, ff: 0.25 },
+  { code: "6666", name: "كهرباء الشرق",          sector: "المرافق العامة",    px: 24.75,  shares: 4166000000, vol: 0.009, ff: 0.20 },
+  { code: "7777", name: "تقنية سدرة",            sector: "تقنية المعلومات",   px: 133.20, shares: 120000000,  vol: 0.026, ff: 0.70 },
+  { code: "8888", name: "تأمين الأمان",          sector: "التأمين",           px: 12.64,  shares: 100000000,  vol: 0.022, ff: 0.60 },
+  { code: "9999", name: "لوجستيات الدرب",        sector: "النقل",             px: 66.95,  shares: 80000000,   vol: 0.018, ff: 0.75 },
+  { code: "2121", name: "أغذية الوادي",          sector: "إنتاج الأغذية",     px: 30.38,  shares: 220000000,  vol: 0.014, ff: 0.50 }
 ];
 
 /* ==========================================================================
@@ -306,13 +309,21 @@ var U = {
     var u = 1 - Math.random(), v = Math.random();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   },
-  // وحدة تغير السعر حسب شريحة السعر (مبسطة)
+  // وحدة تغير السعر حسب شريحة السعر — جدول مبسّط قريب من جدول تداول
   tick: function (p) {
     if (p < 10) return 0.01;
     if (p < 25) return 0.02;
     if (p < 50) return 0.05;
-    if (p < 100) return 0.05;
-    return 0.10;
+    if (p < 100) return 0.10;
+    if (p < 200) return 0.20;
+    if (p < 500) return 0.50;
+    if (p < 1000) return 1.00;
+    return 2.00;
+  },
+  // هل السعر يقع تماماً على وحدة تغير صالحة؟
+  onTick: function (p) {
+    var t = U.tick(p);
+    return Math.abs(p / t - Math.round(p / t)) < 1e-6;
   },
   // تقريب السعر لأقرب وحدة تغير صالحة
   round: function (p) {
@@ -353,20 +364,24 @@ var MKT = {
 
 /* تهيئة حالة سهم واحد */
 function makeSymbolState(def) {
+  var p0 = U.round(def.px);   // محاذاة السعر الابتدائي على وحدة تغير صالحة
   return {
     code: def.code, name: def.name, sector: def.sector,
-    shares: def.shares, volFactor: def.vol,
-    fair: def.px,          // "القيمة العادلة" التي يدور حولها السعر (محرك الاتجاه)
-    prevClose: def.px,     // إغلاق أمس (أساس حد التذبذب ±10%)
+    shares: def.shares,
+    ff: def.ff || 0.5,     // نسبة الأسهم الحرة (وزن السهم في المؤشر)
+    volFactor: def.vol,
+    fair: p0,              // القيمة العادلة التي يدور حولها السعر
+    prevClose: p0,         // سعر إغلاق أمس المعتمد (أساس حد التذبذب)
     open: null,
-    last: def.px,
-    high: def.px, low: def.px,
+    last: p0,
+    high: p0, low: p0,
+    closePx: null,         // سعر الإغلاق المعتمد من مزاد الإغلاق
     volume: 0, value: 0,
     bids: [], asks: [],
     tape: [],              // آخر الصفقات
-    bars: [],              // شموع {t,o,h,l,c,v}
+    bars: [],              // شموع
     curBar: null,
-    startPx: def.px
+    startPx: p0
   };
 }
 
@@ -379,6 +394,7 @@ function initMarket() {
   MKT.minute = 9 * 60 + 30;
   MKT.dayIndex = 0;
   MKT.totalValue = 0;
+  newAuctionJitter();
 }
 
 /* حدود التذبذب اليومية لسهم */
@@ -427,26 +443,56 @@ function recordTrade(S, px, qty) {
   updateBar(S, px, qty);
 }
 
-/* محرك المطابقة: ينفّذ كل التقاطعات الموجودة في الدفتر */
-function matchBook(S) {
+/* منع المطابقة الذاتية: إلغاء الأمر الأقدم عند تقاطع أمرين لنفس المالك */
+function smpCancel(S, pair) {
+  var old = pair.b.t <= pair.a.t ? pair.b : pair.a;
+  old.cancelled = true;
+  if (old.owner === "YOU") {
+    if (old.side === "buy") { PF.cash += old.resPer * old.left; PF.reserved -= old.resPer * old.left; }
+    else { getPos(old.code).locked -= old.left; }
+    PF.myOrders = PF.myOrders.filter(function (x) { return x.id !== old.id; });
+    toast("أُلغي أحد أوامرك لأن تنفيذه كان سيتم مقابل أمرك المعاكس (منع المطابقة الذاتية)", "err");
+  }
+  S.bids = S.bids.filter(function (o) { return o.id !== old.id; });
+  S.asks = S.asks.filter(function (o) { return o.id !== old.id; });
+}
+
+/* فك التقاطع في الدفتر. fixedPx = null يعني تداولاً مستمراً بسعر الأمر الأقدم،
+   وقيمة محددة تعني تنفيذاً بسعر موحّد (مزاد أو تداول عند سعر الإغلاق) */
+function uncross(S, fixedPx) {
   var guard = 0;
-  while (S.bids.length && S.asks.length && S.bids[0].px >= S.asks[0].px && guard++ < 500) {
-    var b = S.bids[0], a = S.asks[0];
-    // السعر = سعر الأمر الأقدم (الذي كان في الدفتر أولاً)
-    var px = b.t <= a.t ? b.px : a.px;
+  while (guard++ < 1000 && S.bids.length && S.asks.length) {
+    var b = null, a = null, blocked = null;
+    for (var i = 0; i < S.bids.length && !b; i++) {
+      var bo = S.bids[i];
+      if (fixedPx !== null && bo.px < fixedPx) break;
+      for (var j = 0; j < S.asks.length; j++) {
+        var ao = S.asks[j];
+        if (ao.px > bo.px) break;
+        if (fixedPx !== null && ao.px > fixedPx) break;
+        if (bo.owner === ao.owner) { if (!blocked) blocked = { b: bo, a: ao }; continue; }
+        b = bo; a = ao; break;
+      }
+    }
+    if (!b) { if (blocked) { smpCancel(S, blocked); continue; } break; }
+    var px = fixedPx !== null ? fixedPx : (b.t <= a.t ? b.px : a.px);
     var qty = Math.min(b.left, a.left);
     b.left -= qty; a.left -= qty;
     recordTrade(S, px, qty);
-    // تحديث محفظة المستخدم إن كان طرفاً في الصفقة
     if (b.owner === "YOU") fillUser(S, "buy", px, qty, b);
     if (a.owner === "YOU") fillUser(S, "sell", px, qty, a);
     removeFilled(S);
   }
 }
 
+/* التداول المستمر: أولوية السعر ثم الوقت */
+function matchBook(S) { uncross(S, null); }
+
 /* إنشاء أمر جديد وإدخاله للسوق */
 function placeOrder(S, side, px, qty, owner, resPer) {
   var band = priceBand(S);
+  // في فترة التداول عند سعر الإغلاق لا يُقبل إلا سعر الإغلاق المعتمد
+  if (MKT.session === "closingPrice" && S.closePx) px = S.closePx;
   px = U.round(Math.min(band.hi, Math.max(band.lo, px)));
   if (qty <= 0) return null;
   var o = {
@@ -454,7 +500,8 @@ function placeOrder(S, side, px, qty, owner, resPer) {
     px: px, qty: qty, left: qty, owner: owner, resPer: resPer || 0, t: MKT.nextOrderId
   };
   addToBook(S, o);
-  if (MKT.session === "continuous" || MKT.session === "closingPrice") matchBook(S);
+  if (MKT.session === "continuous") matchBook(S);
+  else if (MKT.session === "closingPrice") uncross(S, S.closePx || null);
   return o;
 }
 
@@ -516,6 +563,14 @@ function runMarketMaker(S) {
   }
 }
 
+/* تدفق أوامر فترة التداول عند سعر الإغلاق: كل الأوامر عند سعر الإغلاق فقط */
+function runClosingPriceFlow(S) {
+  if (!S.closePx || Math.random() > 0.30) return;
+  var side = Math.random() < 0.5 ? "buy" : "sell";
+  var qty = Math.round(U.rnd(100, 1200) / 100) * 100;
+  placeOrder(S, side, S.closePx, qty, side === "buy" ? "CP_B" : "CP_S");
+}
+
 /* متداول عشوائي: أوامر قابلة للتنفيذ فوراً تستهلك السيولة */
 function runNoiseTrader(S) {
   if (Math.random() > 0.55) return;
@@ -569,11 +624,27 @@ function nudgeFair(S, side, qty) {
    ========================================================================== */
 var simSeconds = 0; // إجمالي الثواني الافتراضية منذ بدء المحاكاة (لبناء الشموع)
 
+/* فترة عشوائية (حتى دقيقة) تُنهي المزاد في لحظة غير معلومة مسبقاً */
+function newAuctionJitter() {
+  MKT.jitterOpen = Math.random() * CONFIG.auctionRandomMax;
+  MKT.jitterClose = Math.random() * CONFIG.auctionRandomMax;
+}
+
+/* حدود الجلسة بعد تطبيق الفترة العشوائية */
+function sessionBounds(s) {
+  var from = s.from, to = s.to;
+  if (s.key === "openAuction") to -= MKT.jitterOpen || 0;
+  if (s.key === "continuous") from -= MKT.jitterOpen || 0;
+  if (s.key === "closeAuction") to -= MKT.jitterClose || 0;
+  if (s.key === "closingPrice") from -= MKT.jitterClose || 0;
+  return { from: from, to: to };
+}
+
 function sessionAt(min, date) {
   if (CONFIG.tradingDays.indexOf(date.getDay()) === -1) return null;
   for (var i = 0; i < CONFIG.sessions.length; i++) {
-    var s = CONFIG.sessions[i];
-    if (min >= s.from && min < s.to) return s;
+    var s = CONFIG.sessions[i], b = sessionBounds(s);
+    if (min >= b.from && min < b.to) return s;
   }
   return null;
 }
@@ -589,25 +660,37 @@ function updateSession() {
   if (prev === "closeAuction" && MKT.session !== "closeAuction") runAuctionAll("إغلاق");
 }
 
-/* تنفيذ المزاد: سعر واحد يُحقق أكبر كمية (مبسّط: منتصف أفضل عرض وطلب) */
+/* سعر المزاد: أعلى كمية قابلة للتنفيذ، ثم أقل فائض غير منفّذ، ثم الأقرب للسعر المرجعي */
+function auctionPrice(S) {
+  var cands = {}, i;
+  for (i = 0; i < S.bids.length; i++) cands[S.bids[i].px] = 1;
+  for (i = 0; i < S.asks.length; i++) cands[S.asks[i].px] = 1;
+  var best = null;
+  for (var k in cands) {
+    var p = parseFloat(k), dq = 0, sq = 0;
+    for (i = 0; i < S.bids.length; i++) if (S.bids[i].px >= p) dq += S.bids[i].left;
+    for (i = 0; i < S.asks.length; i++) if (S.asks[i].px <= p) sq += S.asks[i].left;
+    var exec = Math.min(dq, sq);
+    if (exec <= 0) continue;
+    var sur = Math.abs(dq - sq), dist = Math.abs(p - S.prevClose);
+    var better = !best || exec > best.exec + 1e-9
+      || (Math.abs(exec - best.exec) < 1e-9 && sur < best.sur - 1e-9)
+      || (Math.abs(exec - best.exec) < 1e-9 && Math.abs(sur - best.sur) < 1e-9 && dist < best.dist);
+    if (better) best = { px: p, exec: exec, sur: sur, dist: dist };
+  }
+  return best;
+}
+
+/* تنفيذ المزاد لكل الأسهم بسعر موحّد لكل سهم */
 function runAuctionAll(kind) {
+  var done = 0;
   for (var c in MKT.S) {
     var S = MKT.S[c];
-    var b = bestBid(S), a = bestAsk(S);
-    if (b === null || a === null) continue;
-    var px = U.round((b + a) / 2);
-    var guard = 0;
-    while (S.bids.length && S.asks.length && S.bids[0].px >= S.asks[0].px && guard++ < 500) {
-      var bo = S.bids[0], ao = S.asks[0];
-      var qty = Math.min(bo.left, ao.left);
-      bo.left -= qty; ao.left -= qty;
-      recordTrade(S, px, qty);
-      if (bo.owner === "YOU") fillUser(S, "buy", px, qty, bo);
-      if (ao.owner === "YOU") fillUser(S, "sell", px, qty, ao);
-      removeFilled(S);
-    }
+    var res = auctionPrice(S);
+    if (res) { uncross(S, res.px); done++; }
+    if (kind === "إغلاق") S.closePx = res ? U.round(res.px) : S.last;
   }
-  toast("تم تنفيذ مزاد ال" + kind + " بسعر موحّد لكل سهم", "ok");
+  toast("تم تنفيذ مزاد ال" + kind + " وفق أعلى كمية قابلة للتنفيذ (" + done + " سهم)", "ok");
 }
 
 /* بناء الشموع */
@@ -628,7 +711,8 @@ function updateBar(S, px, qty) {
 function endOfDay() {
   for (var c in MKT.S) {
     var S = MKT.S[c];
-    S.prevClose = S.last;
+    S.prevClose = S.closePx || S.last;   // مرجع حد التذبذب غداً = سعر الإغلاق المعتمد
+    S.closePx = null;
     S.open = null;
     S.high = S.last; S.low = S.last;
     S.volume = 0; S.value = 0;
@@ -637,6 +721,7 @@ function endOfDay() {
   MKT.totalValue = 0;
   BOTS.noise = 0; BOTS.momo = 0; BOTS.value = 0;
   MKT.dayIndex++;
+  newAuctionJitter();
   releaseSettlements();
   // الانتقال لأقرب يوم تداول قادم
   do { MKT.date.setDate(MKT.date.getDate() + 1); }
@@ -722,9 +807,37 @@ function submitUserOrder(code, side, type, px, qty) {
   if (type === "market") {
     px = side === "buy" ? (bestAsk(S) || band.hi) : (bestBid(S) || band.lo);
   }
+  // أوامر IOC و FOK لا تُقبل أثناء المزاد لأنه لا يوجد تنفيذ فوري فيه
+  if ((MKT.session === "openAuction" || MKT.session === "closeAuction") && (type === "ioc" || type === "fok")) {
+    return toast("أوامر IOC و FOK غير مقبولة أثناء فترات المزاد", "err");
+  }
+  // فترة التداول عند سعر الإغلاق: السعر مثبّت على سعر الإغلاق المعتمد
+  if (MKT.session === "closingPrice") {
+    if (!S.closePx) return toast("لم يُعتمد سعر إغلاق لهذا السهم اليوم", "err");
+    if (type === "limit" && Math.abs(px - S.closePx) > 1e-9) {
+      toast("في فترة التداول عند سعر الإغلاق يُقبل سعر الإغلاق فقط: " + U.num(S.closePx), "err");
+    }
+    px = S.closePx;
+  }
+  if (!(px > 0)) return toast("لا يوجد سعر متاح لتنفيذ الأمر الآن", "err");
+  // التحقق من وحدة تغير السعر
+  if (type !== "market" && MKT.session !== "closingPrice" && !U.onTick(px)) {
+    return toast("السعر يجب أن يكون من مضاعفات وحدة التغير " + U.num(U.tick(px)) + " لهذه الشريحة السعرية", "err");
+  }
   px = U.round(px);
   if (px < band.lo || px > band.hi) {
     return toast("السعر خارج حد التذبذب المسموح (" + U.num(band.lo) + " - " + U.num(band.hi) + ")", "err");
+  }
+
+  // تنفيذ كامل أو إلغاء: لا نرسل الأمر أصلاً إن لم تكفِ السيولة المقابلة
+  if (type === "fok") {
+    var opp = side === "buy" ? S.asks : S.bids, avail = 0;
+    for (var i = 0; i < opp.length; i++) {
+      var oo = opp[i];
+      if (oo.owner === "YOU") continue;              // أوامرك لا تُطابق أوامرك
+      if (side === "buy" ? oo.px <= px : oo.px >= px) avail += oo.left;
+    }
+    if (avail < qty) return toast("تنفيذ كامل أو إلغاء: المتاح " + U.int(avail) + " سهم فقط، لم يُرسل الأمر", "err");
   }
 
   if (side === "buy") {
@@ -732,13 +845,19 @@ function submitUserOrder(code, side, type, px, qty) {
     if (need > PF.cash) return toast("النقد المتاح لا يكفي. المطلوب " + U.num(need) + " ريال", "err");
     PF.cash -= need; PF.reserved += need;
     var o = placeOrder(S, "buy", px, qty, "YOU", need / qty);
-    if (o.left > 0.0001) PF.myOrders.push(o);
+    if (o.left > 0.0001 && !o.cancelled) {
+      PF.myOrders.push(o);
+      if (type === "ioc" || type === "fok") { cancelMyOrder(o.id); toast("أُلغي الجزء غير المنفّذ وفق نوع الأمر", "err"); }
+    }
   } else {
     var p = getPos(code);
     if (p.qty - p.locked < qty) return toast("لا تملك كمية كافية غير محجوزة للبيع", "err");
     p.locked += qty;
     var o2 = placeOrder(S, "sell", px, qty, "YOU", 0);
-    if (o2.left > 0.0001) PF.myOrders.push(o2);
+    if (o2.left > 0.0001 && !o2.cancelled) {
+      PF.myOrders.push(o2);
+      if (type === "ioc" || type === "fok") { cancelMyOrder(o2.id); toast("أُلغي الجزء غير المنفّذ وفق نوع الأمر", "err"); }
+    }
   }
   toast("تم إرسال أمر " + (side === "buy" ? "شراء" : "بيع") + " " + U.int(qty) + " @ " + U.num(px));
   render();
@@ -875,13 +994,15 @@ function toast(msg, cls) {
   setTimeout(function () { d.remove(); }, 3200);
 }
 
+/* المؤشر مرجّح بالقيمة السوقية للأسهم الحرة فقط */
 function indexValue() {
   var now = 0, base = 0, prev = 0;
   for (var i = 0; i < SYMBOLS.length; i++) {
     var S = MKT.S[SYMBOLS[i].code];
-    now += S.last * S.shares;
-    base += S.startPx * S.shares;
-    prev += S.prevClose * S.shares;
+    var w = S.shares * S.ff;
+    now += S.last * w;
+    base += S.startPx * w;
+    prev += S.prevClose * w;
   }
   return { level: CONFIG.indexBase * now / base, chg: (now - prev) / prev * 100 };
 }
@@ -929,15 +1050,19 @@ function renderBots() {
 function renderRules() {
   el("rulesBody").innerHTML =
     "• أيام التداول: الأحد إلى الخميس<br>" +
-    "• مزاد الافتتاح 9:30–10:00<br>" +
-    "• التداول المستمر 10:00–15:00<br>" +
-    "• مزاد الإغلاق 15:00–15:10<br>" +
-    "• التداول عند سعر الإغلاق 15:10–15:20<br>" +
-    "• المطابقة بأولوية السعر ثم الوقت<br>" +
-    "• حد التذبذب اليومي ±10% من إغلاق أمس<br>" +
+    "• مزاد الافتتاح 9:30–10:00 وينتهي في لحظة عشوائية خلال آخر دقيقة<br>" +
+    "• التداول المستمر حتى 15:00<br>" +
+    "• مزاد الإغلاق 15:00–15:10 بنهاية عشوائية أيضاً<br>" +
+    "• التداول عند سعر الإغلاق 15:10–15:20 بسعر الإغلاق فقط<br>" +
+    "• سعر المزاد: أعلى كمية قابلة للتنفيذ، ثم أقل فائض، ثم الأقرب لإغلاق أمس<br>" +
+    "• المطابقة بأولوية السعر ثم الوقت، مع منع المطابقة الذاتية<br>" +
+    "• حد التذبذب اليومي ±10% من سعر إغلاق أمس المعتمد<br>" +
+    "• وحدات تغير السعر: 0.01 دون 10 · 0.02 دون 25 · 0.05 دون 50 · 0.10 دون 100 · 0.20 دون 200 · 0.50 دون 500 · 1.00 دون 1000 · 2.00 فأعلى<br>" +
+    "• أنواع الأوامر: محدد · سوق · تنفيذ فوري وإلغاء الباقي (IOC) · تنفيذ كامل أو إلغاء (FOK)<br>" +
+    "• المؤشر مرجّح بالقيمة السوقية للأسهم الحرة<br>" +
     "• تسوية نقد البيع T+2<br>" +
     "• العمولة 0.155% بحد أدنى 0.15 ريال<br><br>" +
-    "<b>تنبيه:</b> جميع الشركات والأسعار والأخبار في هذا المحاكي وهمية بالكامل، والغرض تعليمي فقط. لا يُعتبر أي شيء هنا توصية استثمارية.";
+    "<b>تنبيه:</b> جميع الشركات والأسعار والأخبار وهمية بالكامل، والقواعد أعلاه مبسّطة لأغراض تعليمية وليست مرجعاً نظامياً ولا توصية استثمارية.";
 }
 
 function renderSymbol() {
@@ -955,7 +1080,9 @@ function renderSymbol() {
     "<span>الأدنى <b>" + U.num(S.low) + "</b></span>" +
     "<span>الكمية <b>" + U.int(S.volume) + "</b></span>" +
     "<span>القيمة <b>" + U.int(S.value) + "</b></span>" +
-    "<span>القيمة السوقية <b>" + U.num(S.last * S.shares / 1e9) + " مليار</b></span>";
+    "<span>القيمة السوقية <b>" + U.num(S.last * S.shares / 1e9) + " مليار</b></span>" +
+    "<span>الأسهم الحرة <b>" + U.num(S.ff * 100, 0) + "%</b></span>" +
+    "<span>وحدة التغير <b>" + U.num(U.tick(S.last)) + "</b></span>";
   var band = priceBand(S);
   el("limitInfo").textContent =
     "حد التذبذب اليومي ±10%: من " + U.num(band.lo) + " إلى " + U.num(band.hi) +
@@ -1042,13 +1169,16 @@ var side = "buy"; // الجانب المختار في نموذج إدخال ال
 function renderEstimate() {
   var qty = parseFloat(el("oQty").value) || 0;
   var px = parseFloat(el("oPx").value) || 0;
+  var S = MKT.S[el("oSym").value];
   if (el("oType").value === "market") {
-    var S = MKT.S[el("oSym").value];
     px = side === "buy" ? (bestAsk(S) || S.last) : (bestBid(S) || S.last);
   }
   var gross = px * qty, fee = commission(gross);
-  el("oEst").textContent = "القيمة التقديرية " + U.num(gross) + " ريال · العمولة " + U.num(fee) +
-    " ريال · الإجمالي " + U.num(side === "buy" ? gross + fee : gross - fee) + " ريال";
+  el("oEst").innerHTML =
+    "القيمة التقديرية <b>" + U.num(gross) + "</b> ريال · العمولة <b>" + U.num(fee) +
+    "</b> ريال · الإجمالي <b>" + U.num(side === "buy" ? gross + fee : gross - fee) + "</b> ريال<br>" +
+    "العمولة 0.155% بحد أدنى 0.15 ريال، وتشمل عمولة الوساطة ورسوم السوق والإيداع والمقاصة (تقريب تعليمي)<br>" +
+    "وحدة تغير السعر لهذا السهم: <b>" + U.num(U.tick(S ? S.last : px)) + "</b>";
 }
 
 function setSide(s) {
@@ -1109,7 +1239,7 @@ function bindUI() {
   window.addEventListener("resize", drawChart);
   el("tips").innerHTML = "اختر شركة من <b>مراقبة السوق</b> ← حدد الكمية والسعر ← أرسل الأمر. " +
     "الأمر المحدد ينتظر في <b>دفتر الأوامر</b> حتى يقابله طرف آخر، وأمر السوق ينفّذ فوراً بأفضل سعر متاح. " +
-    "راقب <b>عمق السوق</b> لتعرف السيولة قبل الدخول.";
+    "راقب <b>عمق السوق</b> لتعرف السيولة قبل الدخول، وتذكر أن السعر يجب أن يكون من مضاعفات وحدة التغير المعلنة لكل شريحة سعرية.";
 }
 
 /* خطوة واحدة من المحاكاة */
@@ -1122,7 +1252,8 @@ function step(dtSec) {
     for (var i = 0; i < SYMBOLS.length; i++) {
       var S = MKT.S[SYMBOLS[i].code];
       driftFair(S, dtSec);
-      runMarketMaker(S);
+      if (MKT.session === "closingPrice") runClosingPriceFlow(S);
+      else runMarketMaker(S);
       if (MKT.session === "continuous") {
         runNoiseTrader(S);
         runMomentum(S);
