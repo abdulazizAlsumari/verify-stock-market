@@ -100,6 +100,10 @@ canvas{display:block;width:100%;height:260px}
 </head>
 <body>
 
+<div style="background-image:linear-gradient(90deg,#6b1717,#8a2020);color:#ffe9e9;padding:8px 14px;font-size:13px;line-height:1.6;text-align:center;border-bottom:1px solid #c0392b">
+  <b>⚠ موقع تجريبي تعليمي فقط</b> — جميع الشركات والرموز والأسعار والأخبار هنا <b>وهمية بالكامل</b> ولا تمثل أي شركة مدرجة حقيقية، ولا يُعد أي محتوى فيه توصية أو نصيحة استثمارية.
+</div>
+
 <!-- ======================= الشريط العلوي ======================= -->
 <div class="top">
   <div class="brand">محاكي السوق السعودي<span class="tag">تعليمي · بيانات وهمية بالكامل</span></div>
@@ -249,6 +253,30 @@ canvas{display:block;width:100%;height:260px}
   </div>
 </div>
 
+<div class="card" style="margin:12px">
+  <h3>البصمة الإحصائية — قارن السهم الوهمي بسهم حقيقي</h3>
+  <div class="bd">
+    <div class="mut" style="line-height:1.9;margin-bottom:10px">
+      السهم لا يُقارَن باسمه بل ببصمته الإحصائية. اختر سهماً من المحاكي، ثم الصق أسعار إغلاق السهم الحقيقي الذي تريد مقارنته به
+      (سعر واحد في كل سطر؛ وإذا لصقت CSV يبدأ بتاريخ سنأخذ العمود الثاني). كل الحساب يتم داخل متصفحك ولا تُرسل أي بيانات لأي خادم.
+      بعد المقارنة اضغط «عايِر» ليعدّل المحاكي الملف السلوكي للسهم الوهمي حتى تقترب بصمته من بصمة السهم الحقيقي (قد تحتاج ضغطتين). التطابق الأهم هو التذبذب والمدى اليومي وسماكة الذيول، أما الاتجاه السنوي فعيّنة سنة واحدة لا تكفي للحكم عليه.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <select id="cmpSym"></select>
+      <input id="cmpName" placeholder="اسم/وصف السهم الحقيقي (اختياري)" style="padding:6px;background:#0e1420;color:#d8e0ea;border:1px solid #2a3443;border-radius:6px">
+      <button id="cmpRun">قارن</button>
+      <button id="cmpCal">عايِر الوهمي ليطابق الحقيقي</button>
+      <span id="cmpMsg" class="mut"></span>
+    </div>
+    <textarea id="cmpData" rows="4" style="width:100%;box-sizing:border-box;background:#0e1420;color:#d8e0ea;border:1px solid #2a3443;border-radius:6px;padding:8px;font-family:inherit" placeholder="82.10&#10;83.40&#10;81.90&#10;..."></textarea>
+    <div id="cmpNote" class="mut" style="margin:8px 0"></div>
+    <table style="margin-top:4px">
+      <thead><tr><th>المقياس</th><th>الوهمي</th><th>الحقيقي</th><th>التطابق</th><th>ماذا يقيس</th></tr></thead>
+      <tbody id="cmpBody"></tbody>
+    </table>
+  </div>
+</div>
+
 <div id="tips" class="tips"></div>
 <div id="toast"></div>
 
@@ -286,16 +314,49 @@ var CONFIG = {
    كل شركة: الرمز، الاسم، القطاع، سعر البداية، عدد الأسهم، تقلب يومي تقريبي، ff = نسبة الأسهم الحرة
    ========================================================================== */
 var SYMBOLS = [
-  { code: "1111", name: "بنك الواحة",            sector: "البنوك",            px: 85.70,  shares: 1200000000, vol: 0.011, ff: 0.30 },
-  { code: "2222", name: "سابكو للبتروكيماويات",  sector: "المواد الأساسية",   px: 82.45,  shares: 3000000000, vol: 0.016, ff: 0.40 },
-  { code: "3333", name: "إسمنت نجد",             sector: "المواد الأساسية",   px: 48.16,  shares: 165000000,  vol: 0.013, ff: 0.65 },
-  { code: "4444", name: "أسواق الركن",           sector: "تجزئة الأغذية",     px: 19.10,  shares: 450000000,  vol: 0.015, ff: 0.55 },
-  { code: "5555", name: "اتصالات المها",         sector: "الاتصالات",         px: 51.35,  shares: 2000000000, vol: 0.010, ff: 0.25 },
-  { code: "6666", name: "كهرباء الشرق",          sector: "المرافق العامة",    px: 24.75,  shares: 4166000000, vol: 0.009, ff: 0.20 },
-  { code: "7777", name: "تقنية سدرة",            sector: "تقنية المعلومات",   px: 133.20, shares: 120000000,  vol: 0.026, ff: 0.70 },
-  { code: "8888", name: "تأمين الأمان",          sector: "التأمين",           px: 12.64,  shares: 100000000,  vol: 0.022, ff: 0.60 },
-  { code: "9999", name: "لوجستيات الدرب",        sector: "النقل",             px: 66.95,  shares: 80000000,   vol: 0.018, ff: 0.75 },
-  { code: "2121", name: "أغذية الوادي",          sector: "إنتاج الأغذية",     px: 30.38,  shares: 220000000,  vol: 0.014, ff: 0.50 }
+  /* ملاحظة: كل الرموز أدناه وهمية (أرقام مكررة أو خماسية تبدأ بـ 9) ولا تطابق أي رمز حقيقي في تداول.
+     الحقل prof هو "الملف السلوكي" للسهم: mu/md اتجاه سنوي في نظام الصعود/الهبوط، ps احتمال تبديل النظام يومياً،
+     sg التذبذب اليومي الأساسي، vd مضاعف التذبذب في نظام الهبوط، pj/jz احتمال وحجم القفزات النادرة،
+     al/be معاملا تجمّع التذبذب (GARCH مبسّط). هذه القيم تُعايَر من لوحة المقارنة. */
+  { code: "1111",  name: "بنك الواحة",             sector: "البنوك",            px: 85.70,  shares: 1200000000, vol: 0.011, ff: 0.30,
+    prof: { mu: 0.12, md: -0.09, ps: 0.009, pr: 0.030, sg: 0.011, vd: 1.4, bt: 0.95, pj: 0.003, jz: 0.025, al: 0.10, be: 0.82 },
+    note: "سهم قيادي ثقيل: تذبذب منخفض وحركة قريبة من المؤشر" },
+  { code: "22222", name: "سابكو للبتروكيماويات",   sector: "المواد الأساسية",   px: 82.45,  shares: 3000000000, vol: 0.016, ff: 0.40,
+    prof: { mu: 0.18, md: -0.14, ps: 0.011, pr: 0.033, sg: 0.016, vd: 1.5, bt: 1.10, pj: 0.006, jz: 0.035, al: 0.11, be: 0.81 },
+    note: "دورية: موجات صعود وهبوط مرتبطة بدورة الأسعار العالمية" },
+  { code: "3333",  name: "إسمنت نجد",              sector: "المواد الأساسية",   px: 48.16,  shares: 165000000,  vol: 0.013, ff: 0.65,
+    prof: { mu: 0.12, md: -0.10, ps: 0.010, pr: 0.032, sg: 0.013, vd: 1.4, bt: 0.85, pj: 0.004, jz: 0.030, al: 0.10, be: 0.82 },
+    note: "دفاعي بتوزيعات: مدى يومي محدود" },
+  { code: "4444",  name: "أسواق الركن",            sector: "تجزئة الأغذية",     px: 19.10,  shares: 450000000,  vol: 0.015, ff: 0.55,
+    prof: { mu: 0.10, md: -0.09, ps: 0.010, pr: 0.032, sg: 0.015, vd: 1.4, bt: 0.80, pj: 0.005, jz: 0.030, al: 0.10, be: 0.82 },
+    note: "تجزئة: حساس للهوامش والمواسم" },
+  { code: "5555",  name: "اتصالات المها",          sector: "الاتصالات",         px: 51.35,  shares: 2000000000, vol: 0.010, ff: 0.25,
+    prof: { mu: 0.10, md: -0.06, ps: 0.008, pr: 0.030, sg: 0.010, vd: 1.3, bt: 0.75, pj: 0.003, jz: 0.022, al: 0.09, be: 0.83 },
+    note: "دفاعي منخفض التذبذب" },
+  { code: "6666",  name: "كهرباء الشرق",           sector: "المرافق العامة",    px: 24.75,  shares: 4166000000, vol: 0.009, ff: 0.20,
+    prof: { mu: 0.07, md: -0.05, ps: 0.008, pr: 0.028, sg: 0.009, vd: 1.3, bt: 0.65, pj: 0.002, jz: 0.020, al: 0.08, be: 0.84 },
+    note: "مرافق: أقل الأسهم تذبذباً" },
+  { code: "7777",  name: "تقنية سدرة",             sector: "تقنية المعلومات",   px: 133.20, shares: 120000000,  vol: 0.025, ff: 0.70,
+    prof: { mu: 0.45, md: -0.32, ps: 0.014, pr: 0.040, sg: 0.025, vd: 1.6, bt: 1.25, pj: 0.014, jz: 0.055, al: 0.13, be: 0.80 },
+    note: "نمو: تذبذب عالٍ وذيول سميكة" },
+  { code: "8888",  name: "تأمين الأمان",           sector: "التأمين",           px: 12.64,  shares: 100000000,  vol: 0.021, ff: 0.60,
+    prof: { mu: 0.16, md: -0.16, ps: 0.014, pr: 0.038, sg: 0.021, vd: 1.6, bt: 1.05, pj: 0.011, jz: 0.050, al: 0.13, be: 0.79 },
+    note: "مضاربي صغير: موجات سريعة" },
+  { code: "9999",  name: "لوجستيات الدرب",         sector: "النقل",             px: 66.95,  shares: 80000000,   vol: 0.018, ff: 0.75,
+    prof: { mu: 0.20, md: -0.13, ps: 0.011, pr: 0.034, sg: 0.018, vd: 1.4, bt: 1.00, pj: 0.007, jz: 0.038, al: 0.11, be: 0.81 },
+    note: "نقل ولوجستيات: نمو متوسط" },
+  { code: "2121",  name: "أغذية الوادي",           sector: "إنتاج الأغذية",     px: 30.38,  shares: 220000000,  vol: 0.014, ff: 0.50,
+    prof: { mu: 0.11, md: -0.08, ps: 0.009, pr: 0.031, sg: 0.014, vd: 1.4, bt: 0.80, pj: 0.004, jz: 0.028, al: 0.10, be: 0.82 },
+    note: "أغذية: مستقر نسبياً" },
+  { code: "91010", name: "أنابيب الصفا الصناعية",  sector: "السلع الرأسمالية",  px: 118.40, shares: 60000000,   vol: 0.026, ff: 0.28,
+    prof: { mu: 0.85, md: -0.50, ps: 0.012, pr: 0.042, sg: 0.026, vd: 1.7, bt: 1.20, pj: 0.020, jz: 0.055, al: 0.14, be: 0.80 },
+    note: "تصنيع أنابيب: اتجاه صاعد طويل مدفوع بالطلبيات، تصحيحات حادة، تداول حر منخفض" },
+  { code: "91020", name: "مصانع الربوة الكهربائية", sector: "السلع الرأسمالية", px: 92.60,  shares: 70000000,   vol: 0.023, ff: 0.32,
+    prof: { mu: 0.65, md: -0.40, ps: 0.011, pr: 0.040, sg: 0.023, vd: 1.6, bt: 1.15, pj: 0.016, jz: 0.048, al: 0.14, be: 0.79 },
+    note: "صناعات كهربائية: نمو مرتبط بمشاريع البنية التحتية مع موجات زخم عنيفة" },
+  { code: "91030", name: "محطات المرتفعات للوقود",  sector: "الطاقة",           px: 142.80, shares: 40000000,   vol: 0.016, ff: 0.35,
+    prof: { mu: 0.30, md: -0.18, ps: 0.010, pr: 0.036, sg: 0.016, vd: 1.4, bt: 0.90, pj: 0.007, jz: 0.030, al: 0.12, be: 0.81 },
+    note: "محطات وقود وتجزئة: نمو تشغيلي تدريجي وتذبذب أهدأ" }
 ];
 
 /* ==========================================================================
@@ -364,7 +425,8 @@ var MKT = {
 
 /* تهيئة حالة سهم واحد */
 function makeSymbolState(def) {
-  var p0 = U.round(def.px);   // محاذاة السعر الابتدائي على وحدة تغير صالحة
+  var p0 = U.round(def.px);
+  var prof = def.prof || { mu: 0.08, md: -0.06, ps: 0.010, sg: def.vol, vd: 1.4, pj: 0.004, jz: 0.030, al: 0.10, be: 0.82 };   // محاذاة السعر الابتدائي على وحدة تغير صالحة
   return {
     code: def.code, name: def.name, sector: def.sector,
     shares: def.shares,
@@ -381,15 +443,29 @@ function makeSymbolState(def) {
     tape: [],              // آخر الصفقات
     bars: [],              // شموع
     curBar: null,
-    startPx: p0
+    startPx: p0,
+    note: def.note || "",
+    prof: prof,                         // الملف السلوكي
+    bst: { reg: 0, v: prof.sg * prof.sg, e2: prof.sg * prof.sg },  // حالة النموذج
+    daily: [],                          // سجل يومي O/H/L/C/V للإحصاءات
+    dayTarget: null                     // سعر هدف اليوم المشتق من الملف السلوكي
   };
 }
 
 function initMarket() {
   MKT.S = {};
+  MKT.mktPath = [];
+  MKT.mktIdx = 250;
   for (var i = 0; i < SYMBOLS.length; i++) {
     MKT.S[SYMBOLS[i].code] = makeSymbolState(SYMBOLS[i]);
   }
+  // توليد تاريخ يومي اصطناعي (سنة تداول تقريباً) لتتكوّن البصمة الإحصائية فوراً
+  for (var k = 0; k < SYMBOLS.length; k++) {
+    var S0 = MKT.S[SYMBOLS[k].code];
+    seedHistory(S0, 250);
+    newDayTarget(S0);
+  }
+  seedIndexHistory();
   MKT.date = new Date(MKT.started.getTime());
   MKT.minute = 9 * 60 + 30;
   MKT.dayIndex = 0;
@@ -541,11 +617,102 @@ function aggregate(arr, n) {
 var BOTS = { mm: 0, noise: 0, momo: 0, value: 0 };
 
 /* تحريك "القيمة العادلة" للسهم: مشي عشوائي + أثر تدفق الأوامر */
+/* ==========================================================================
+   المحرّك السلوكي للسهم (Behavior Engine)
+   يولّد عائداً يومياً من: اتجاه حسب النظام (صعود/تصحيح) + تذبذب متجمّع
+   (GARCH مبسّط) + قفزات نادرة تُنتج ذيولاً سميكة. هذه الخصائص الثلاث هي ما
+   يجعل سلوك السهم الوهمي قابلاً للمقارنة إحصائياً بسلوك سهم حقيقي.
+   ========================================================================== */
+/* عامل السوق المشترك: يجعل الأسهم تتحرك معاً فتظهر بيتا واقعية موجبة */
+var SGM = 0.0085;
+function marketReturn(i) {
+  if (!MKT.mktPath) MKT.mktPath = [];
+  while (MKT.mktPath.length <= i) {
+    var prev = MKT.mktPath.length ? MKT.mktPath[MKT.mktPath.length - 1] : 0;
+    MKT.mktPath.push(0.00022 + U.gauss() * SGM + prev * 0.05);
+  }
+  return MKT.mktPath[i];
+}
+function nextDailyReturn(S, day) {
+  var P = S.prof, st = S.bst, bt = P.bt || 1;
+  // نفصل تذبذب السهم إلى جزء سوقي وجزء خاص بالشركة
+  var sgI = Math.sqrt(Math.max(Math.pow(0.35 * P.sg, 2), P.sg * P.sg - Math.pow(bt * SGM, 2)));
+  if (!(st.v > 0)) { st.v = sgI * sgI; st.e2 = st.v; }
+  // مدد غير متماثلة: الصعود يطول والتصحيح أقصر وأعنف
+  var pSw = st.reg === 0 ? P.ps : (P.pr || P.ps * 3);
+  if (Math.random() < pSw) st.reg = st.reg === 0 ? 1 : 0;
+  var mu = (st.reg === 0 ? P.mu : P.md) / 252;
+  var sg = sgI * (st.reg === 0 ? 1 : P.vd);
+  var om = Math.max(0.00001, 1 - P.al - P.be) * sg * sg;
+  st.v = om + P.al * st.e2 + P.be * st.v;
+  var e = U.gauss() * Math.sqrt(st.v);
+  st.e2 = e * e;
+  var rm = marketReturn(day === undefined ? (MKT.mktIdx || 0) : day);
+  var r = mu + bt * rm + e;
+  if (Math.random() < P.pj) r += (Math.random() < 0.45 ? -1 : 1) * P.jz * (0.6 + Math.random() * 1.2);
+  return Math.max(-0.095, Math.min(0.095, r));
+}
+
+/* هدف اليوم: يُحسب مرة عند فتح اليوم ثم يُجذب السعر نحوه خلال الجلسة */
+function newDayTarget(S) {
+  var t = S.prevClose * Math.exp(nextDailyReturn(S));
+  var b = priceBand(S);
+  S.dayTarget = Math.min(b.hi, Math.max(b.lo, t));
+}
+
+/* تاريخ يومي اصطناعي يُولَّد قبل بدء المحاكاة حتى تتكوّن بصمة إحصائية فوراً */
+function seedHistory(S, days) {
+  var px = S.prevClose, i, d;
+  for (i = 0; i < days; i++) {
+    var r = nextDailyReturn(S, i);
+    var o = px, c = px * Math.exp(r);
+    var rng = Math.abs(r) + Math.abs(U.gauss()) * S.prof.sg * 0.6;
+    var h = Math.max(o, c) * (1 + rng * 0.45);
+    var l = Math.min(o, c) * (1 - rng * 0.45);
+    var turn = S.shares * S.ff * (0.0012 + Math.abs(r) * 0.05) * (0.6 + Math.random() * 0.8);
+    S.daily.push({ o: o, h: h, l: l, c: c, v: Math.round(turn) });
+    px = c;
+  }
+  // نُعيد تحجيم التاريخ لينتهي عند السعر الحالي (التاريخ للإحصاءات لا للسعر)
+  if (S.daily.length) {
+    var sc = S.prevClose / S.daily[S.daily.length - 1].c;
+    for (i = 0; i < S.daily.length; i++) {
+      d = S.daily[i]; d.o *= sc; d.h *= sc; d.l *= sc; d.c *= sc;
+    }
+  }
+}
+
+/* سلسلة المؤشر اليومية (للمقارنة وحساب بيتا) */
+function seedIndexHistory() {
+  MKT.idxDaily = [];
+  var n = 0, i, j, S;
+  for (i = 0; i < SYMBOLS.length; i++) {
+    S = MKT.S[SYMBOLS[i].code];
+    if (S.daily.length > n) n = S.daily.length;
+  }
+  var base = 0;
+  for (i = 0; i < SYMBOLS.length; i++) { S = MKT.S[SYMBOLS[i].code]; base += S.startPx * S.shares * S.ff; }
+  for (j = 0; j < n; j++) {
+    var v = 0;
+    for (i = 0; i < SYMBOLS.length; i++) {
+      S = MKT.S[SYMBOLS[i].code];
+      var k = S.daily.length - n + j;
+      var px = k >= 0 ? S.daily[k].c : S.startPx;
+      v += px * S.shares * S.ff;
+    }
+    MKT.idxDaily.push(CONFIG.indexBase * v / base);
+  }
+}
+
 function driftFair(S, dtSec) {
-  var sigmaPerSec = S.volFactor / Math.sqrt(21000); // توزيع التقلب اليومي على ثواني الجلسة
+  // مضاعف التذبذب الحالي من حالة النموذج: الأيام العنيفة تأتي متتالية
+  var vm = Math.sqrt(S.bst.v) / (S.prof.sg || 0.012);
+  vm = Math.max(0.5, Math.min(2.5, vm));
+  var sigmaPerSec = S.volFactor * vm / Math.sqrt(21000);
   S.fair *= Math.exp(sigmaPerSec * U.gauss() * Math.sqrt(dtSec) - 0.5 * sigmaPerSec * sigmaPerSec * dtSec);
-  // ارتداد بطيء نحو إغلاق أمس يمنع الانفلات الكامل للسعر (mean reversion)
-  S.fair += (S.prevClose - S.fair) * 0.00015 * dtSec;
+  // جذب نحو هدف اليوم المشتق من الملف السلوكي (بدل الارتداد لإغلاق أمس)
+  var anchor = S.dayTarget || S.prevClose;
+  S.fair += (anchor - S.fair) * 0.00035 * dtSec;
   var band = priceBand(S);
   S.fair = Math.min(band.hi, Math.max(band.lo, S.fair));
 }
@@ -711,7 +878,11 @@ function updateBar(S, px, qty) {
 function endOfDay() {
   for (var c in MKT.S) {
     var S = MKT.S[c];
-    S.prevClose = S.closePx || S.last;   // مرجع حد التذبذب غداً = سعر الإغلاق المعتمد
+    var cl = S.closePx || S.last;
+    // شمعة اليوم تُحفظ في السجل اليومي (أساس البصمة الإحصائية)
+    S.daily.push({ o: S.open || S.prevClose, h: S.high, l: S.low, c: cl, v: S.volume });
+    if (S.daily.length > 750) S.daily.shift();
+    S.prevClose = cl;   // مرجع حد التذبذب غداً = سعر الإغلاق المعتمد
     S.closePx = null;
     S.open = null;
     S.high = S.last; S.low = S.last;
@@ -721,6 +892,11 @@ function endOfDay() {
   MKT.totalValue = 0;
   BOTS.noise = 0; BOTS.momo = 0; BOTS.value = 0;
   MKT.dayIndex++;
+  MKT.mktIdx = (MKT.mktIdx || 250) + 1;
+  if (!MKT.idxDaily) MKT.idxDaily = [];
+  MKT.idxDaily.push(indexValue().level);
+  if (MKT.idxDaily.length > 750) MKT.idxDaily.shift();
+  for (var c2 in MKT.S) newDayTarget(MKT.S[c2]);
   newAuctionJitter();
   releaseSettlements();
   // الانتقال لأقرب يوم تداول قادم
@@ -995,6 +1171,163 @@ function toast(msg, cls) {
 }
 
 /* المؤشر مرجّح بالقيمة السوقية للأسهم الحرة فقط */
+/* ==========================================================================
+   البصمة الإحصائية: المقاييس التي تتيح مقارنة سهم وهمي بسهم حقيقي
+   ========================================================================== */
+function logRets(c) {
+  var r = [], i;
+  for (i = 1; i < c.length; i++) if (c[i] > 0 && c[i - 1] > 0) r.push(Math.log(c[i] / c[i - 1]));
+  return r;
+}
+function mMean(a) { var s = 0, i; for (i = 0; i < a.length; i++) s += a[i]; return a.length ? s / a.length : 0; }
+function mSd(a) { var m = mMean(a), s = 0, i; for (i = 0; i < a.length; i++) s += (a[i] - m) * (a[i] - m); return a.length > 1 ? Math.sqrt(s / (a.length - 1)) : 0; }
+function mMoment(a, k) {
+  var m = mMean(a), sd = mSd(a), s = 0, i;
+  if (!sd) return 0;
+  for (i = 0; i < a.length; i++) s += Math.pow((a[i] - m) / sd, k);
+  return a.length ? s / a.length : 0;
+}
+function maxDrawdown(c) {
+  var pk = c[0] || 0, dd = 0, i;
+  for (i = 0; i < c.length; i++) { if (c[i] > pk) pk = c[i]; var d = pk ? (pk - c[i]) / pk : 0; if (d > dd) dd = d; }
+  return dd * 100;
+}
+/* تجمّع التذبذب: الارتباط الذاتي لمربع العوائد عند فجوة يوم واحد */
+function autoCorrSq(r) {
+  var x = [], i;
+  for (i = 0; i < r.length; i++) x.push(r[i] * r[i]);
+  var m = mMean(x), num = 0, den = 0;
+  for (i = 1; i < x.length; i++) num += (x[i] - m) * (x[i - 1] - m);
+  for (i = 0; i < x.length; i++) den += (x[i] - m) * (x[i] - m);
+  return den ? num / den : 0;
+}
+function betaVs(r, rb) {
+  var n = Math.min(r.length, rb.length);
+  if (n < 10) return null;
+  var a = r.slice(r.length - n), b = rb.slice(rb.length - n);
+  var ma = mMean(a), mb = mMean(b), cov = 0, vb = 0, i;
+  for (i = 0; i < n; i++) { cov += (a[i] - ma) * (b[i] - mb); vb += (b[i] - mb) * (b[i] - mb); }
+  return vb ? cov / vb : null;
+}
+function statsOfCloses(c) {
+  var r = logRets(c), i, ab = 0;
+  if (r.length < 5) return null;
+  for (i = 0; i < r.length; i++) ab += Math.abs(r[i]);
+  return {
+    n: c.length,
+    vol: mSd(r) * Math.sqrt(252) * 100,   // التذبذب السنوي
+    drift: mMean(r) * 252 * 100,          // الاتجاه السنوي
+    adr: r.length ? ab / r.length * 100 : 0,
+    dd: maxDrawdown(c),
+    skew: mMoment(r, 3),
+    kurt: mMoment(r, 4),
+    ac1: autoCorrSq(r),
+    rets: r
+  };
+}
+function simStats(S) {
+  var c = [], i;
+  for (i = 0; i < S.daily.length; i++) c.push(S.daily[i].c);
+  var st = statsOfCloses(c);   // نكتفي بالإغلاقات اليومية ليتطابق المحور الزمني مع المؤشر
+  if (!st) return null;
+  var rng = 0, vv = 0, k = 0;
+  for (i = 0; i < S.daily.length; i++) {
+    var d = S.daily[i];
+    if (d.c > 0) { rng += (d.h - d.l) / d.c; vv += d.v; k++; }
+  }
+  st.hl = k ? rng / k * 100 : 0;
+  st.turn = k ? (vv / k) / (S.shares * S.ff) * 100 : 0;
+  st.beta = betaVs(st.rets, logRets(MKT.idxDaily || []));
+  return st;
+}
+/* قراءة أسعار الإغلاق الملصوقة: سطر لكل سعر، أو CSV يبدأ بتاريخ */
+function parseCloses(txt) {
+  var out = [], lines = String(txt).split(/[\n\r]+/), i, j;
+  for (i = 0; i < lines.length; i++) {
+    var toks = lines[i].split(/[\t,;|\s]+/), nums = [], isDate = /^\d{1,4}[-\/]\d{1,2}[-\/]\d{1,4}$/.test(toks[0]);
+    for (j = 0; j < toks.length; j++) {
+      var t = toks[j].replace(/[^0-9.\-]/g, "");
+      if (t && /^-?\d*\.?\d+$/.test(t)) nums.push(parseFloat(t));
+    }
+    var pick = null;
+    if (nums.length === 1) pick = nums[0];
+    else if (nums.length > 1) pick = isDate ? nums[0] : nums[nums.length - 1];
+    if (pick !== null && pick > 0 && pick < 100000) out.push(pick);
+  }
+  return out;
+}
+var CMP = { real: null, name: "" };
+function matchPct(a, b) {
+  if (a === null || b === null || a === undefined || b === undefined || isNaN(a) || isNaN(b)) return null;
+  var m = Math.max(Math.abs(a), Math.abs(b));
+  if (m < 1e-9) return 100;
+  return Math.max(0, 100 - Math.abs(a - b) / m * 100);
+}
+function fmtN(v, d) { return (v === null || v === undefined || isNaN(v)) ? "—" : v.toFixed(d); }
+function renderCompare() {
+  if (!el("cmpBody")) return;
+  var code = el("cmpSym").value, S = MKT.S[code];
+  if (!S) return;
+  var a = simStats(S), b = CMP.real;
+  el("cmpNote").textContent = S.code + " - " + S.name + (S.note ? " · " + S.note : "") + " · عدد الأيام في السجل: " + (a ? a.n : 0);
+  var rows = [
+    ["التذبذب السنوي %", a ? a.vol : null, b ? b.vol : null, 1, "حدّة تحرك السهم — أهم مقياس للمقارنة"],
+    ["الاتجاه السنوي %", a ? a.drift : null, b ? b.drift : null, 1, "ميل السهم العام — رقم شديد التذبذب إحصائياً فلا تتوقع تطابقه"],
+    ["متوسط |العائد اليومي| %", a ? a.adr : null, b ? b.adr : null, 2, "حجم الحركة اليومية المعتادة"],
+    ["أقصى تراجع %", a ? a.dd : null, b ? b.dd : null, 1, "أعمق هبوط من قمة إلى قاع"],
+    ["الالتواء", a ? a.skew : null, b ? b.skew : null, 2, "هل الحركات المتطرفة صاعدة أم هابطة"],
+    ["التفلطح", a ? a.kurt : null, b ? b.kurt : null, 2, "سماكة الذيول: تكرار القفزات الكبيرة"],
+    ["تجمّع التذبذب", a ? a.ac1 : null, b ? b.ac1 : null, 2, "هل الأيام العنيفة تأتي متتالية"],
+    ["المدى اليومي (أعلى-أدنى) %", a ? a.hl : null, null, 2, "يتطلب أعلى/أدنى للسهم الحقيقي"],
+    ["بيتا مقابل مؤشر المحاكي", a ? a.beta : null, null, 2, "حساسية السهم لحركة السوق"],
+    ["دوران الأسهم الحرة يومياً %", a ? a.turn : null, null, 3, "سيولة السهم منسوبة لأسهمه الحرة"]
+  ];
+  var h = "", i;
+  for (i = 0; i < rows.length; i++) {
+    var r = rows[i], m = matchPct(r[1], r[2]);
+    var cl = m === null ? "mut" : (m >= 85 ? "up" : (m >= 65 ? "" : "dn"));
+    h += "<tr><td>" + r[0] + "</td><td>" + fmtN(r[1], r[3]) + "</td><td>" + fmtN(r[2], r[3]) +
+         '</td><td class="' + cl + '">' + (m === null ? "—" : m.toFixed(0) + "%") +
+         '</td><td class="mut">' + r[4] + "</td></tr>";
+  }
+  el("cmpBody").innerHTML = h;
+}
+/* معايرة الملف السلوكي للسهم الوهمي على بصمة السهم الحقيقي */
+function calibrateSym() {
+  var S = MKT.S[el("cmpSym").value], b = CMP.real;
+  if (!b) { toast("الصق أسعار السهم الحقيقي واضغط قارن أولاً", "warn"); return; }
+  var P = S.prof;
+  // 1) الاتجاه: نوزّعه على نظامي الصعود والتصحيح بحيث يكون المتوسط طويل الأجل = اتجاه السهم الحقيقي
+  var span = Math.max(0.05, P.mu - P.md);
+  var pr = P.pr || P.ps * 3;
+  var pBull = pr / (pr + P.ps);
+  var tgt = b.drift / 100;
+  P.mu = tgt + span * (1 - pBull);
+  P.md = P.mu - span;
+  // 2) الذيول والتجمّع
+  if (b.kurt > 6) P.pj = Math.min(0.05, P.pj * 1.5);
+  if (b.ac1 > 0.20) P.be = Math.min(0.88, P.be + 0.02);
+  // 3) التذبذب: تكرار مُخمَّد حتى يقترب التذبذب السنوي من الهدف
+  var cur = null;
+  for (var it = 0; it < 10; it++) {
+    if (P.bt * SGM * 1.2 > P.sg) P.bt = Math.max(0.2, P.sg / (SGM * 1.2));
+    S.daily = [];
+    S.bst = { reg: 0, v: P.sg * P.sg, e2: P.sg * P.sg };
+    seedHistory(S, 250);
+    cur = simStats(S);
+    if (!cur) break;
+    if (Math.abs(cur.vol - b.vol) < Math.max(1, b.vol * 0.05)) break;
+    var k = Math.max(0.5, Math.min(2, Math.pow(b.vol / Math.max(1, cur.vol), 0.8)));
+    P.sg *= k;
+    P.jz *= k;
+  }
+  S.volFactor = P.sg;
+  seedIndexHistory();
+  newDayTarget(S);
+  renderCompare();
+  toast("تمت معايرة " + S.name + ": التذبذب " + (cur ? cur.vol.toFixed(0) : "-") + "% مقابل " + b.vol.toFixed(0) + "% للسهم الحقيقي", "ok");
+}
+
 function indexValue() {
   var now = 0, base = 0, prev = 0;
   for (var i = 0; i < SYMBOLS.length; i++) {
@@ -1049,6 +1382,7 @@ function renderBots() {
 
 function renderRules() {
   el("rulesBody").innerHTML =
+    "• كل الرموز والأسماء وهمية (أرقام مكررة أو خماسية تبدأ بـ 9) ولا تطابق أي شركة مدرجة<br>" +
     "• أيام التداول: الأحد إلى الخميس<br>" +
     "• مزاد الافتتاح 9:30–10:00 وينتهي في لحظة عشوائية خلال آخر دقيقة<br>" +
     "• التداول المستمر حتى 15:00<br>" +
@@ -1198,6 +1532,27 @@ function selectSymbol(code) {
 }
 
 function bindUI() {
+  // لوحة البصمة الإحصائية والمقارنة
+  var ch = "";
+  for (var z = 0; z < SYMBOLS.length; z++) ch += '<option value="' + SYMBOLS[z].code + '">' + SYMBOLS[z].code + " - " + SYMBOLS[z].name + "</option>";
+  el("cmpSym").innerHTML = ch;
+  el("cmpSym").addEventListener("change", renderCompare);
+  el("cmpRun").addEventListener("click", function () {
+    var arr = parseCloses(el("cmpData").value);
+    if (arr.length < 20) {
+      CMP.real = null;
+      el("cmpMsg").textContent = "أحتاج 20 سعر إغلاق على الأقل (قرأت " + arr.length + ")";
+      renderCompare();
+      return;
+    }
+    CMP.real = statsOfCloses(arr);
+    CMP.real.n = arr.length;
+    CMP.name = el("cmpName").value || "السهم الحقيقي";
+    el("cmpMsg").textContent = "قرأت " + arr.length + " سعر إغلاق لـ " + CMP.name;
+    renderCompare();
+  });
+  el("cmpCal").addEventListener("click", calibrateSym);
+  renderCompare();
   // قائمة الرموز في نموذج الأمر
   var h = "";
   for (var i = 0; i < SYMBOLS.length; i++) h += '<option value="' + SYMBOLS[i].code + '">' + SYMBOLS[i].code + " - " + SYMBOLS[i].name + "</option>";
@@ -1239,7 +1594,8 @@ function bindUI() {
   window.addEventListener("resize", drawChart);
   el("tips").innerHTML = "اختر شركة من <b>مراقبة السوق</b> ← حدد الكمية والسعر ← أرسل الأمر. " +
     "الأمر المحدد ينتظر في <b>دفتر الأوامر</b> حتى يقابله طرف آخر، وأمر السوق ينفّذ فوراً بأفضل سعر متاح. " +
-    "راقب <b>عمق السوق</b> لتعرف السيولة قبل الدخول، وتذكر أن السعر يجب أن يكون من مضاعفات وحدة التغير المعلنة لكل شريحة سعرية.";
+    "راقب <b>عمق السوق</b> لتعرف السيولة قبل الدخول، وتذكر أن السعر يجب أن يكون من مضاعفات وحدة التغير المعلنة لكل شريحة سعرية. " +
+    "ولمقارنة سلوك أي سهم هنا بسهم حقيقي استخدم لوحة <b>البصمة الإحصائية</b> في أسفل الصفحة.";
 }
 
 /* خطوة واحدة من المحاكاة */
